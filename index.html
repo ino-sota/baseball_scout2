@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大学野球 偵察マネージャー(修正版)</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 10px; background: #f4f4f9; color: #333; padding-bottom: 80px; }
+  h2, h3 { text-align: center; color: #0056b3; margin: 5px 0 10px; }
+  .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
+  .hidden { display: none !important; }
+  .row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .col { flex: 1; }
+  select, input, button { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+  
+  /* ボタン類 */
+  .btn-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .btn-check { padding: 12px 5px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 6px; text-align: center; cursor: pointer; font-size: 0.9rem; user-select: none; display: flex; align-items: center; justify-content: center; line-height: 1.2; }
+  .btn-check.active { background: #007bff; color: white; border-color: #0056b3; }
+  .btn-unknown { background: #e0e0e0; color: #555; font-size: 0.8rem; }
+  #submit-btn { background: #28a745; color: white; font-weight: bold; border: none; padding: 15px; font-size: 1.1rem; }
+  
+  /* グラウンド入力 */
+  #field-container { width: 300px; height: 250px; margin: 0 auto; position: relative; background: #4caf50; border-radius: 8px; overflow: hidden; cursor: crosshair; border: 2px solid #388e3c; }
+  #field-svg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none; }
+  #hit-marker { width: 12px; height: 12px; background: blue; border: 2px solid white; border-radius: 50%; position: absolute; display: none; transform: translate(-50%, -50%); pointer-events: none; }
+  .field-label { text-align: center; font-size: 0.8rem; color: white; position: absolute; width: 100%; bottom: 5px; pointer-events: none;}
+
+  /* 投球コース */
+  #grid-wrapper { width: 280px; margin: 0 auto; position: relative; }
+  #grid-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; width: 100%; height: 280px; }
+  .grid-cell { background: #e0e0e0; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: transparent; }
+  .grid-cell.strike-zone { background: #fff; border: 2px solid #999; }
+  .grid-cell.selected { background: #ff4444 !important; border-color: #cc0000; }
+  #home-plate { width: 140px; height: 0; margin: 5px auto 0; border-top: 40px solid white; border-left: 70px solid transparent; border-right: 70px solid transparent; position: relative; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); }
+  #home-plate::after { content: "捕手視点"; position: absolute; top: -35px; left: -30px; font-size: 0.8rem; color: #333; font-weight: bold; width: 60px; text-align: center; }
+
+  /* モーダル */
+  .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:flex; justify-content:center; align-items:center; }
+  .modal-box { background:white; padding:20px; border-radius:10px; width:90%; max-width:400px; }
+  .count-btn { margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; font-weight: bold; text-align: left; padding-left: 20px;}
+  .count-btn span { float: right; color: #666; font-weight: normal; font-size: 0.9rem; }
+
+  /* 履歴リスト */
+  .game-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+  .btn-resume { padding: 5px 10px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 0.8rem; width: auto; margin-right: 5px;}
+  .btn-delete { padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 0.8rem; width: auto; }
+  
+  /* スイッチ */
+  .switch-field { display: flex; margin-bottom: 10px; overflow: hidden; }
+  .switch-field input { position: absolute !important; clip: rect(0, 0, 0, 0); height: 1px; width: 1px; border: 0; overflow: hidden; }
+  .switch-field label { background-color: #e4e4e4; color: rgba(0, 0, 0, 0.6); font-size: 14px; line-height: 1; text-align: center; padding: 12px 16px; margin-right: -1px; border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px rgba(255, 255, 255, 0.1); transition: all 0.1s ease-in-out; flex:1; }
+  .switch-field label:hover { cursor: pointer; }
+  .switch-field input:checked + label { background-color: #007bff; color: white; box-shadow: none; }
+  .switch-field label:first-of-type { border-radius: 4px 0 0 4px; }
+  .switch-field label:last-of-type { border-radius: 0 4px 4px 0; }
+
+  #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:1000; display:flex; justify-content:center; align-items:center; flex-direction:column; }
+  .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 10px; }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  #network-status { position: fixed; top: 0; left: 0; width: 100%; background: #ffc107; color: #333; text-align: center; font-size: 0.8rem; padding: 4px; display: none; z-index: 999; }
+</style>
+</head>
+<body>
+
+<div id="network-status">未送信: <span id="unsent-count">0</span></div>
+<div id="loading-screen" class="hidden"><div class="spinner"></div><div id="loading-text">処理中...</div></div>
+
+<div id="sub-modal" class="hidden modal-overlay" onclick="document.getElementById('sub-modal').classList.add('hidden')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3 style="margin-top:0">🔄 選手交代</h3>
+    <div style="margin-bottom:15px;">
+      <label>【守備】投手</label>
+      <div style="display:flex; gap:5px;"><select id="sub-pitcher-select"></select><button onclick="applyPitcherChange()" style="background:#007bff; color:white; width:auto;">交代</button></div>
+    </div>
+    <div style="margin-bottom:15px; border-top:1px solid #eee; padding-top:10px;">
+      <label>【攻撃】代打</label>
+      <div style="display:flex; gap:5px;"><select id="sub-batter-select"></select><button onclick="applyBatterChange()" style="background:#d32f2f; color:white; width:auto;">代打</button></div>
+    </div>
+    <button onclick="document.getElementById('sub-modal').classList.add('hidden')" style="background:#666; color:white;">閉じる</button>
+  </div>
+</div>
+
+<div id="unknown-modal" class="hidden modal-overlay">
+  <div class="modal-box" style="background:#f0f8ff;">
+    <h3 style="margin-top:0; color:#333;">🤔 結果は不明ですが...</h3>
+    <p style="font-size:0.9rem; text-align:center;">カウントはどう進めますか？</p>
+    <button class="count-btn" onclick="resolveUnknown('ball')">ボール <span>(B+1)</span></button>
+    <button class="count-btn" onclick="resolveUnknown('strike')">ストライク <span>(S+1)</span></button>
+    <button class="count-btn" onclick="resolveUnknown('foul')">ファール <span>(S+1 or 0)</span></button>
+    <button class="count-btn" onclick="resolveUnknown('out')">アウト <span>(1死 / 次打者)</span></button>
+    <button class="count-btn" onclick="resolveUnknown('next')">出塁/得点 <span>(次打者)</span></button>
+    <button class="count-btn" onclick="resolveUnknown('none')" style="background:#ddd;">変更なし <span>(牽制など)</span></button>
+  </div>
+</div>
+
+<div id="dashboard-screen" class="card">
+  <h2>⚾ 偵察マネージャー</h2>
+  <button onclick="showSetup()" style="background:#007bff; color:white; font-weight:bold; margin-bottom:20px; padding:15px;">＋ 新しい試合を作成</button>
+  <h3>履歴・再開</h3>
+  <div id="history-area" style="text-align:center;">
+    <button onclick="loadHistory()" style="background:#17a2b8; color:white; width:auto; padding:10px 20px;">📂 過去の試合履歴を読み込む</button>
+    <div id="game-list-container" style="margin-top:15px;"></div>
+  </div>
+</div>
+
+<div id="setup-screen" class="card hidden">
+  <h3>試合設定</h3>
+  <label>試合形式</label>
+  <div class="switch-field">
+    <input type="radio" id="mode-league" name="match-mode" value="league" checked onchange="toggleMode()">
+    <label for="mode-league">リーグ戦 (名簿あり)</label>
+    <input type="radio" id="mode-practice" name="match-mode" value="practice" onchange="toggleMode()">
+    <label for="mode-practice">練習試合 (手入力)</label>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <label>先攻</label>
+      <div id="top-selector-area"><select id="team-top" onchange="onTeamSelect('top')"><option value="">選択...</option></select></div>
+    </div>
+    <div class="col">
+      <label>後攻</label>
+      <div id="bottom-selector-area"><select id="team-bottom" onchange="onTeamSelect('bottom')"><option value="">選択...</option></select></div>
+    </div>
+  </div>
+  <div class="row"><div class="col" id="lineup-top-container"></div><div class="col" id="lineup-bottom-container"></div></div>
+  <div class="row"><div class="col"><label>Game ID</label><input type="text" id="input-game-id" readonly style="background:#eee;"></div></div>
+  <button onclick="startGame()" style="background:#28a745; color:white;">試合開始</button>
+  <button onclick="location.reload()" style="background:#6c757d; color:white; margin-top:10px;">戻る</button>
+</div>
+
+<div id="game-screen" class="hidden">
+  <div id="status-bar">
+    <div id="status-inning">1回表</div>
+    <div>B:<span id="disp-ball">0</span> S:<span id="disp-strike">0</span> O:<span id="disp-out">0</span></div>
+  </div>
+
+  <div class="card" style="text-align:center; background:#e3f2fd;">
+    <div style="font-size:0.8rem;">ID: <span id="current-game-id"></span></div>
+    <div style="font-weight:bold;">投: <span id="current-pitcher"></span></div>
+    <div style="font-size:1.4rem; color:#d32f2f; font-weight:bold;">VS <span id="current-batter"></span></div>
+    <button onclick="openSubModal()" style="margin-top:5px; padding:6px; background:white; color:#333; border:1px solid #ccc; font-size:0.8rem; width:auto;">🔄 選手交代</button>
+  </div>
+
+  <div class="card">
+    <div id="grid-wrapper">
+      <div id="grid-container"></div>
+      <div id="home-plate"></div>
+    </div>
+    <div style="text-align:center; margin-top:5px;">
+        <button class="btn-unknown" onclick="setUnknownCourse()" style="width:auto; padding:5px 10px;">コース不明</button>
+    </div>
+    <input type="hidden" id="course_id">
+  </div>
+
+  <div class="card">
+    <label>球種</label>
+    <div class="btn-group" id="ball-type-group">
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">ストレート</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">スライダー</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">カーブ</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">フォーク</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">チェンジ</div>
+      <div class="btn-check btn-unknown" onclick="selectBtn('ball-type-group', this)">不明</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>結果 (※詳細入力へ)</label>
+    <div class="btn-group" id="result-group">
+      <div class="btn-check" onclick="onResultSelect(this, false)">見逃し<br><span style="font-size:0.7rem">(ストライク)</span></div>
+      <div class="btn-check" onclick="onResultSelect(this, false)">空振り<br><span style="font-size:0.7rem">(ストライク)</span></div>
+      <div class="btn-check" onclick="onResultSelect(this, false)">ボール</div>
+      <div class="btn-check" onclick="onResultSelect(this, false)" data-next="true">四死球※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)">ファール</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">安打※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true" data-out="true">アウト※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">失策※</div>
+      <div class="btn-check btn-unknown" onclick="onResultSelect(this, false)">不明</div>
+    </div>
+    
+    <div id="hit-detail-area" class="hidden" style="margin-top:15px; border-top:2px dashed #ddd; padding-top:10px;">
+      <label style="color:#d32f2f;">打球詳細を入力してください</label>
+      <label>打球の質</label>
+      <div class="btn-group" id="hit-quality-group" style="margin-bottom:10px;">
+        <div class="btn-check" onclick="selectBtn('hit-quality-group', this)">ゴロ</div>
+        <div class="btn-check" onclick="selectBtn('hit-quality-group', this)">フライ</div>
+        <div class="btn-check" onclick="selectBtn('hit-quality-group', this)">ライナー</div>
+        <div class="btn-check" onclick="selectBtn('hit-quality-group', this)">バント</div>
+      </div>
+      <label>着弾点 (タップで指定)</label>
+      <div id="field-container">
+        <svg id="field-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M 50,85 L 85,50 A 45,45 0 0,0 15,50 Z" fill="#ccb57e" />
+          <line x1="50" y1="85" x2="0" y2="35" stroke="white" stroke-width="0.5" />
+          <line x1="50" y1="85" x2="100" y2="35" stroke="white" stroke-width="0.5" />
+          <path d="M 0,35 A 60,60 0 0,1 100,35" fill="none" stroke="white" stroke-width="1" />
+          <rect x="42" y="70" width="16" height="16" transform="rotate(45 50 78)" fill="none" stroke="white" stroke-width="0.5" />
+          <rect x="49" y="84" width="2" height="2" fill="white" />
+          <rect x="73" y="60" width="2" height="2" fill="white" />
+          <rect x="49" y="36" width="2" height="2" fill="white" />
+          <rect x="25" y="60" width="2" height="2" fill="white" />
+        </svg>
+        <div id="hit-marker"></div>
+        <div class="field-label">グラウンド</div>
+      </div>
+      <input type="hidden" id="hit_x"><input type="hidden" id="hit_y">
+    </div>
+  </div>
+
+  <button id="submit-btn" onclick="recordBall()">一球記録</button>
+  <button onclick="undoState()" style="margin-top:10px; background:#6c757d; color:white; padding:8px; border:none; border-radius:4px;">入力ミス修正</button>
+  <button onclick="location.reload()" style="margin-top:10px; background:#333; color:white; padding:8px; border:none; border-radius:4px;">TOPへ</button>
+</div>
+
+<script>
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbztZidK6NKz8jrTOeJkD6b07Qxn94sh2MsND3zOoiR8ViOl5Kn5XaI_tTxKPjwRLFO7/exec"; 
+  const MY_TEAM = "東京";
+  const FIXED_TEAMS = ["東京", "慶應", "早稲田", "明治", "立教", "法政"];
+
+  let ROSTER_CACHE = {};
+  let dataBuffer = [];
+  let unknownPlayerCount = 1;
+  
+  let gameState = {
+    gameId: "", inning: 1, isTop: true, outs: 0, balls: 0, strikes: 0,
+    lineups: { top: [], bottom: [] }, pitchers: { top: "", bottom: "" }, batterIndex: { top: 0, bottom: 0 },
+    teams: { top: "", bottom: "" }
+  };
+
+  window.onload = function() {
+    initTeamSelects();
+    createGrid();
+    initFieldInput();
+  };
+
+  function loadHistory() {
+    const container = document.getElementById('game-list-container');
+    container.innerHTML = '<div class="spinner"></div><div>履歴を取得中...</div>';
+    fetch(`${GAS_URL}?type=init`)
+      .then(res => res.json())
+      .then(data => { renderGameList(data.games); })
+      .catch(err => { container.innerHTML = '履歴取得エラー: ' + err; });
+  }
+
+  function toggleMode() { 
+    initTeamSelects(); 
+  }
+
+  function initTeamSelects() {
+    const isPractice = document.getElementById('mode-practice').checked;
+    const topArea = document.getElementById('top-selector-area');
+    const btmArea = document.getElementById('bottom-selector-area');
+    topArea.innerHTML = `<select id="team-top" onchange="onTeamSelect('top')"><option value="">選択...</option></select>`;
+    btmArea.innerHTML = `<select id="team-bottom" onchange="onTeamSelect('bottom')"><option value="">選択...</option></select>`;
+    const topSel = document.getElementById('team-top');
+    const btmSel = document.getElementById('team-bottom');
+
+    if (isPractice) {
+      topSel.innerHTML = `<option value="${MY_TEAM}">${MY_TEAM}</option><option value="practice">相手校(手入力)</option>`;
+      btmSel.innerHTML = `<option value="${MY_TEAM}">${MY_TEAM}</option><option value="practice">相手校(手入力)</option>`;
+    } else {
+      FIXED_TEAMS.forEach(team => {
+         topSel.add(new Option(team, team));
+         btmSel.add(new Option(team, team));
+      });
+    }
+    
+    // ★初期表示のチーム名簿を即座に読み込む
+    onTeamSelect('top');
+    onTeamSelect('bottom');
+  }
+
+  function onTeamSelect(side) {
+    let teamName = document.getElementById(`team-${side}`).value;
+    const container = document.getElementById(`lineup-${side}-container`);
+    container.innerHTML = "";
+    if(!teamName) return;
+
+    if (teamName === 'practice') {
+      const inputId = `input-team-${side}`;
+      if(!document.getElementById(inputId)) {
+        const parent = document.getElementById(`team-${side}`).parentElement;
+        parent.innerHTML += `<input type="text" id="${inputId}" placeholder="相手校名を入力" onblur="fetchPracticeRoster('${side}')" style="margin-top:5px;">`;
+      }
+      return; 
+    }
+    // ★重要: 東京の場合は、練習試合モードでも強制的に実名簿を読みに行く
+    const isPractice = (teamName === MY_TEAM) ? false : document.getElementById('mode-practice').checked;
+    fetchRoster(side, teamName, isPractice);
+  }
+
+  function fetchPracticeRoster(side) {
+    const teamName = document.getElementById(`input-team-${side}`).value;
+    if(!teamName) return;
+    fetchRoster(side, teamName, true);
+  }
+
+  function fetchRoster(side, teamName, isPractice) {
+    const container = document.getElementById(`lineup-${side}-container`);
+    if (ROSTER_CACHE[teamName]) {
+      renderLineupUI(side, teamName);
+    } else {
+      container.innerHTML = `<div class="loading-mini">名簿取得中...</div>`;
+      fetch(`${GAS_URL}?type=roster&team=${teamName}&is_practice=${isPractice}`)
+        .then(res => res.json())
+        .then(data => {
+          ROSTER_CACHE[teamName] = data;
+          renderLineupUI(side, teamName);
+        });
+    }
+  }
+
+  function renderLineupUI(side, teamName) {
+    const container = document.getElementById(`lineup-${side}-container`);
+    const data = ROSTER_CACHE[teamName];
+    const allPlayers = [...data.pitchers, ...data.fielders]; 
+    const unknownOpt = `<option value="NEW_PLAYER">＋ 選手を追加(不明)</option>`;
+    
+    let html = `<label>${teamName} 投手</label><select id="pitcher-${side}" style="margin-bottom:5px;" onchange="checkNewPlayer(this, '${teamName}', 'pitchers')">${unknownOpt}`;
+    data.pitchers.forEach(p => { html += `<option value="${p}">${p}</option>`; });
+    html += `</select>`;
+    
+    for(let i=0; i<9; i++) {
+      html += `<select id="batter-${side}-${i}" style="margin-bottom:2px; font-size:0.85rem;" onchange="checkNewPlayer(this, '${teamName}', 'fielders')"><option value="">${i+1}番</option>${unknownOpt}`;
+      allPlayers.forEach(p => { 
+         const selected = (p === data.fielders[i]) ? "selected" : ""; 
+         html += `<option value="${p}" ${selected}>${p}</option>`; 
+      });
+      html += `</select>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function checkNewPlayer(selectElem, teamName, role) {
+    if (selectElem.value === "NEW_PLAYER") {
+      const newName = "不明" + (unknownPlayerCount++);
+      ROSTER_CACHE[teamName][role].push(newName);
+      const opt = new Option(newName, newName);
+      selectElem.add(opt, selectElem.options[1]);
+      selectElem.value = newName;
+    }
+  }
+
+  function deleteGame(gameId) {
+    if(!confirm(`Game ID: ${gameId}\n本当に削除しますか？`)) return;
+    document.getElementById('loading-screen').classList.remove('hidden');
+    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', game_id: gameId }) })
+    .then(res => res.json()).then(data => { alert("削除しました"); location.reload(); })
+    .catch(err => { alert("削除エラー: " + err); location.reload(); });
+  }
+
+  function setUnknownCourse() {
+    document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected'));
+    document.getElementById('course_id').value = "不明";
+    alert("コースを「不明」に設定しました");
+  }
+
+  function recordBall() {
+    const ballTypeEl = document.querySelector('#ball-type-group .active');
+    const resultEl = document.querySelector('#result-group .active');
+    const courseId = document.getElementById('course_id').value;
+    
+    if (!ballTypeEl || !resultEl || !courseId) { alert("球種・コース・結果は必須です(不明ボタン可)"); return; }
+    
+    const detailArea = document.getElementById('hit-detail-area');
+    let hitQuality = ""; let hitX = ""; let hitY = "";
+    if (!detailArea.classList.contains('hidden')) {
+      const qEl = document.querySelector('#hit-quality-group .active');
+      hitX = document.getElementById('hit_x').value;
+      if (!qEl || !hitX) { alert("打球詳細を入力してください"); return; }
+      hitQuality = qEl.innerText; hitY = document.getElementById('hit_y').value;
+    }
+
+    const oneBallData = {
+      game_id: gameState.gameId,
+      pitcher: document.getElementById('current-pitcher').innerText,
+      batter: document.getElementById('current-batter').innerText,
+      inning: `${gameState.inning}${gameState.isTop ? '表' : '裏'}`,
+      count: `${gameState.balls}-${gameState.strikes}`,
+      ball_type: ballTypeEl.innerText,
+      result: resultEl.innerText,
+      course_x: courseId, course_y: 0,
+      hit_quality: hitQuality, hit_x: hitX, hit_y: hitY
+    };
+
+    if (resultEl.innerText === "不明") {
+      window.tempData = oneBallData;
+      document.getElementById('unknown-modal').classList.remove('hidden');
+      return; 
+    }
+
+    processRecord(oneBallData, resultEl.innerText, resultEl.getAttribute('data-next') === 'true');
+  }
+
+  function resolveUnknown(action) {
+    const data = window.tempData;
+    let resultTextForLogic = "";
+    if (action === 'ball') resultTextForLogic = "ボール";
+    else if (action === 'strike') resultTextForLogic = "見逃し"; 
+    else if (action === 'foul') resultTextForLogic = "ファール";
+    else if (action === 'out') resultTextForLogic = "アウト";
+    else if (action === 'next') resultTextForLogic = "安打"; 
+    else resultTextForLogic = ""; 
+    document.getElementById('unknown-modal').classList.add('hidden');
+    processRecord(data, resultTextForLogic, false); 
+  }
+
+  function processRecord(data, resultText, isNextForce) {
+    dataBuffer.push(data);
+    updateNetworkStatus();
+    
+    // ★重要: シミュレーション前に「現在打っているチーム」を記憶する
+    const currentAttackingSide = gameState.isTop ? 'top' : 'bottom';
+
+    let isNext = isNextForce;
+    if (resultText !== "") { 
+        const logicNext = simulatePitch(resultText); 
+        if (logicNext) isNext = true; 
+    }
+    
+    // ★修正: チェンジした後でも、さっきまで打っていたチームの打順を進める
+    if (isNext) {
+      if (gameState.lineups[currentAttackingSide].length > 0) {
+        gameState.batterIndex[currentAttackingSide] = (gameState.batterIndex[currentAttackingSide] + 1) % 9;
+      }
+    }
+    updateDisplay();
+    resetForm();
+    if (isNext) flushData();
+  }
+
+  function resetForm() {
+    document.getElementById('course_id').value = "";
+    document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected'));
+    for(let btn of document.getElementsByClassName('btn-check')) btn.classList.remove('active');
+    document.getElementById('hit-detail-area').classList.add('hidden');
+    document.getElementById('hit_x').value = ""; document.getElementById('hit_y').value = ""; document.getElementById('hit-marker').style.display = 'none';
+  }
+
+  function selectBtn(groupId, element) {
+    const group = document.getElementById(groupId);
+    for(let btn of group.getElementsByClassName('btn-check')) btn.classList.remove('active');
+    element.classList.add('active');
+  }
+  function onResultSelect(element, isHit) {
+    selectBtn('result-group', element);
+    const detailArea = document.getElementById('hit-detail-area');
+    if(isHit) { detailArea.classList.remove('hidden'); } 
+    else { 
+      detailArea.classList.add('hidden'); 
+      document.getElementById('hit_x').value = ""; document.getElementById('hit_y').value = ""; document.getElementById('hit-marker').style.display = 'none';
+      const qGroup = document.getElementById('hit-quality-group');
+      for(let btn of qGroup.getElementsByClassName('btn-check')) btn.classList.remove('active');
+    }
+  }
+  function createGrid() {
+    const container = document.getElementById('grid-container');
+    for (let i = 1; i <= 25; i++) {
+      const div = document.createElement('div');
+      div.className = 'grid-cell';
+      if ([7,8,9, 12,13,14, 17,18,19].includes(i)) div.classList.add('strike-zone');
+      div.onclick = function() {
+        document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected'));
+        div.classList.add('selected');
+        document.getElementById('course_id').value = i;
+      };
+      container.appendChild(div);
+    }
+  }
+  function initFieldInput() {
+    const field = document.getElementById('field-container');
+    const marker = document.getElementById('hit-marker');
+    field.addEventListener('click', (e) => {
+      const rect = field.getBoundingClientRect();
+      const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+      document.getElementById('hit_x').value = Math.round((x / rect.width) * 100);
+      document.getElementById('hit_y').value = Math.round((y / rect.height) * 100);
+      marker.style.left = x + 'px'; marker.style.top = y + 'px'; marker.style.display = 'block';
+    });
+  }
+  
+  // ★重要修正: 「(ストライク)」などの文字を削除して判定する
+  function simulatePitch(rawResultText) {
+    // 改行文字を削除し、表記ゆれをクリーニング
+    let result = rawResultText.replace(/(\r\n|\n|\r)/gm, "").replace('※', '').replace('(ストライク)', '');
+    
+    let next = false; let addOut = false;
+    if (result === "ボール") {
+      gameState.balls++; if (gameState.balls >= 4) next = true; 
+    } else if (["見逃し","空振り","ファール"].includes(result)) {
+      if (gameState.strikes < 2 || result !== "ファール") gameState.strikes++;
+      if (gameState.strikes >= 3) { next = true; addOut = true; }
+    } else if (["四死球","安打","失策","アウト"].includes(result)) {
+      next = true;
+      if (result === "アウト") addOut = true;
+    }
+    if (addOut) gameState.outs++;
+    if (next) {
+      gameState.balls = 0; gameState.strikes = 0;
+      if (gameState.outs >= 3) {
+        gameState.outs = 0;
+        if (!gameState.isTop) gameState.inning++;
+        gameState.isTop = !gameState.isTop;
+        setTimeout(() => alert("3アウト チェンジ！"), 100);
+      }
+    }
+    return next;
+  }
+  function flushData() {
+    if (dataBuffer.length === 0) return;
+    const dataToSend = [...dataBuffer]; dataBuffer = []; updateNetworkStatus();
+    fetch(GAS_URL, { method: 'POST', body: JSON.stringify(dataToSend) })
+    .catch(err => { dataBuffer = [...dataToSend, ...dataBuffer]; updateNetworkStatus(); });
+  }
+  function updateNetworkStatus() {
+    const el = document.getElementById('network-status');
+    document.getElementById('unsent-count').innerText = dataBuffer.length;
+    el.style.display = dataBuffer.length > 0 ? 'block' : 'none';
+  }
+  function renderGameList(games) {
+    const list = document.getElementById('game-list-container'); list.innerHTML = "";
+    if (games.length === 0) list.innerHTML = "<p>履歴なし</p>";
+    games.forEach(g => {
+      const div = document.createElement('div'); div.className = 'game-item';
+      div.innerHTML = `<div><div style="font-weight:bold">${g.id}</div><div style="font-size:0.8rem;color:#888">${g.date}</div></div><div><button class="btn-resume" onclick="resumeGame('${g.id}')">再開</button><button class="btn-delete" onclick="deleteGame('${g.id}')">🗑</button></div>`;
+      list.appendChild(div);
+    });
+  }
+  function updateDisplay() {
+    const sideText = gameState.isTop ? "表" : "裏";
+    document.getElementById('status-inning').innerText = `${gameState.inning}回${sideText}`;
+    document.getElementById('disp-ball').innerText = gameState.balls;
+    document.getElementById('disp-strike').innerText = gameState.strikes;
+    document.getElementById('disp-out').innerText = gameState.outs;
+    if(gameState.lineups.top.length > 0) {
+      if (gameState.isTop) {
+        document.getElementById('current-batter').innerText = gameState.lineups.top[gameState.batterIndex.top];
+        document.getElementById('current-pitcher').innerText = gameState.pitchers.bottom; 
+      } else {
+        document.getElementById('current-batter').innerText = gameState.lineups.bottom[gameState.batterIndex.bottom];
+        document.getElementById('current-pitcher').innerText = gameState.pitchers.top; 
+      }
+    }
+  }
+  function undoState() { gameState.balls = 0; gameState.strikes = 0; updateDisplay(); }
+  function openSubModal() {
+    const attackSide = gameState.isTop ? 'top' : 'bottom';
+    const defenseSide = gameState.isTop ? 'bottom' : 'top';
+    const attackTeam = gameState.teams[attackSide];
+    const defenseTeam = gameState.teams[defenseSide];
+    
+    const defTeamName = (defenseTeam === 'practice' && document.getElementById(`input-team-${defenseSide}`)) ? document.getElementById(`input-team-${defenseSide}`).value : defenseTeam;
+    const attTeamName = (attackTeam === 'practice' && document.getElementById(`input-team-${attackSide}`)) ? document.getElementById(`input-team-${attackSide}`).value : attackTeam;
+
+    let defRoster = ROSTER_CACHE[defTeamName];
+    let attRoster = ROSTER_CACHE[attTeamName];
+    if (!defRoster || !attRoster) { alert("名簿データが見つかりません"); return; }
+    
+    const unknownOpt = `<option value="NEW_PLAYER">＋ 選手を追加(不明)</option>`;
+    const pSelect = document.getElementById('sub-pitcher-select'); pSelect.innerHTML = unknownOpt;
+    pSelect.onchange = function() { checkNewPlayer(this, defTeamName, 'pitchers'); };
+    defRoster.pitchers.forEach(p => pSelect.add(new Option(p, p)));
+    const bSelect = document.getElementById('sub-batter-select'); bSelect.innerHTML = unknownOpt;
+    bSelect.onchange = function() { checkNewPlayer(this, attTeamName, 'fielders'); };
+    [...attRoster.pitchers, ...attRoster.fielders].forEach(p => bSelect.add(new Option(p, p)));
+    document.getElementById('sub-modal').classList.remove('hidden');
+  }
+  function applyPitcherChange() {
+    const newPitcher = document.getElementById('sub-pitcher-select').value;
+    if(newPitcher==="NEW_PLAYER") return;
+    const defenseSide = gameState.isTop ? 'bottom' : 'top';
+    gameState.pitchers[defenseSide] = newPitcher;
+    document.getElementById('current-pitcher').innerText = newPitcher;
+    document.getElementById('sub-modal').classList.add('hidden');
+  }
+  function applyBatterChange() {
+    const newBatter = document.getElementById('sub-batter-select').value;
+    if(newBatter==="NEW_PLAYER") return;
+    const attackSide = gameState.isTop ? 'top' : 'bottom';
+    gameState.lineups[attackSide][gameState.batterIndex[attackSide]] = newBatter;
+    document.getElementById('current-batter').innerText = newBatter;
+    document.getElementById('sub-modal').classList.add('hidden');
+  }
+  function startGame() {
+    const isPractice = document.getElementById('mode-practice').checked;
+    let topTeam = document.getElementById('team-top').value;
+    let btmTeam = document.getElementById('team-bottom').value;
+    if (topTeam === 'practice') topTeam = document.getElementById('input-team-top').value;
+    if (btmTeam === 'practice') btmTeam = document.getElementById('input-team-bottom').value;
+    if(!topTeam || !btmTeam) { alert("チーム名を入力してください"); return; }
+    gameState.gameId = document.getElementById('input-game-id').value;
+    gameState.teams.top = topTeam; gameState.teams.bottom = btmTeam;
+    gameState.pitchers.top = document.getElementById('pitcher-top').value;
+    gameState.pitchers.bottom = document.getElementById('pitcher-bottom').value;
+    gameState.lineups.top = []; gameState.lineups.bottom = [];
+    for(let i=0; i<9; i++) {
+      gameState.lineups.top.push(document.getElementById(`batter-top-${i}`).value);
+      gameState.lineups.bottom.push(document.getElementById(`batter-bottom-${i}`).value);
+    }
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    document.getElementById('current-game-id').innerText = gameState.gameId;
+    updateDisplay();
+  }
+  function showSetup() {
+    document.getElementById('dashboard-screen').classList.add('hidden');
+    document.getElementById('setup-screen').classList.remove('hidden');
+    const now = new Date();
+    document.getElementById('input-game-id').value = "GAME-" + (now.getMonth()+1)+""+now.getDate()+"-"+now.getHours()+now.getMinutes();
+  }
+  function resumeGame(gameId) {
+    if(!confirm("再開しますか？")) return;
+    document.getElementById('loading-screen').classList.remove('hidden');
+    fetch(`${GAS_URL}?type=logs&game_id=${gameId}`).then(res=>res.json()).then(logs=>{
+      if(logs.length===0){location.reload();return;}
+      gameState.gameId = gameId; gameState.balls=0; gameState.strikes=0; gameState.outs=0;
+      logs.forEach(r=> { if(r[9] !== "不明") simulatePitch(r[9]); }); 
+      const last=logs[logs.length-1];
+      document.getElementById('current-pitcher').innerText=last[2];
+      document.getElementById('current-batter').innerText=last[3];
+      document.getElementById('current-game-id').innerText=gameId;
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('dashboard-screen').classList.add('hidden');
+      document.getElementById('game-screen').classList.remove('hidden');
+      updateDisplay();
+    });
+  }
+</script>
+</body>
+</html>
