@@ -193,7 +193,10 @@
     <div class="btn-group" id="ball-type-group">
       <div class="btn-check" onclick="selectBtn('ball-type-group', this)">ストレート</div>
       <div class="btn-check" onclick="selectBtn('ball-type-group', this)">スライダー</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">カットボール</div>
       <div class="btn-check" onclick="selectBtn('ball-type-group', this)">カーブ</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">ツーシーム</div>
+      <div class="btn-check" onclick="selectBtn('ball-type-group', this)">シュート</div>
       <div class="btn-check" onclick="selectBtn('ball-type-group', this)">フォーク</div>
       <div class="btn-check" onclick="selectBtn('ball-type-group', this)">チェンジ</div>
       <div class="btn-check btn-unknown" onclick="selectBtn('ball-type-group', this)">不明</div>
@@ -209,12 +212,15 @@
       <div class="btn-check" onclick="onResultSelect(this, false)" data-next="true">死球(出塁)※</div>
       <div class="btn-check" onclick="onResultSelect(this, false)">ファール</div>
       <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">安打※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">二塁打※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">三塁打※</div>
+      <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true">本塁打※</div>
       <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true" data-out="true">アウト※</div>
       <div class="btn-check" onclick="onResultSelect(this, true)" data-next="true" data-base="true">失策(出塁)※</div>
       
       <div class="btn-check btn-special" onclick="onResultSelect(this, false)">ランナー死<br>(1死)</div>
-      <div class="btn-check btn-special" onclick="onResultSelect(this, false)" data-double-play="true">併殺打<br>(2死)</div>
-      <div class="btn-check btn-special" onclick="onResultSelect(this, false)" data-triple-play="true">三重殺<br>(3死)</div>
+      <div class="btn-check btn-special" onclick="onResultSelect(this, true)" data-double-play="true">併殺打<br>(2死)</div>
+      <div class="btn-check btn-special" onclick="onResultSelect(this, true)" data-triple-play="true">三重殺<br>(3死)</div>
       <div class="btn-check btn-unknown" onclick="onResultSelect(this, false)">不明</div>
     </div>
     
@@ -504,7 +510,7 @@
     const detailArea = document.getElementById('hit-detail-area');
     const text = element.innerText;
     // 詳細不要: ファール, ランナー死, 併殺, 三重殺, 死球
-    const skip = text.includes("ファール") || text.includes("ランナー死") || text.includes("併殺") || text.includes("三重殺") || text.includes("死球");
+    const skip = text.includes("ファール") || text.includes("ランナー死") ||  text.includes("死球");
     if(isHit && !skip) { detailArea.classList.remove('hidden'); } 
     else { 
       detailArea.classList.add('hidden'); 
