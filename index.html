@@ -49,6 +49,15 @@
   .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:flex; justify-content:center; align-items:center; }
   .modal-box { background:white; padding:20px; border-radius:10px; width:95%; max-width:500px; max-height: 90vh; overflow-y: auto; }
   
+  /* フォルダ表示用 (新規追加) */
+  .folder-details { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background:white; }
+  .folder-summary { padding: 12px; background: #f1f3f5; cursor: pointer; font-weight: bold; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  .folder-summary::-webkit-details-marker { display: none; } /* Chrome用 */
+  .folder-summary::after { content: "▼"; font-size: 0.8rem; color: #666; transition: transform 0.2s; }
+  .folder-details[open] .folder-summary::after { transform: rotate(180deg); }
+  .folder-content { padding: 0; }
+  .btn-folder { padding: 5px 8px; background: #ffc107; color: #333; border: none; border-radius: 4px; font-size: 0.8rem; margin-right: 5px; cursor: pointer;}
+
   /* その他 */
   .switch-field { display: flex; margin-bottom: 10px; overflow: hidden; }
   .switch-field input { position: absolute !important; clip: rect(0, 0, 0, 0); height: 1px; width: 1px; border: 0; overflow: hidden; }
@@ -69,6 +78,21 @@
 
 <div id="network-status">未送信: <span id="unsent-count">0</span></div>
 <div id="loading-screen" style="display:none;"><div class="spinner"></div><div id="loading-text">処理中...</div></div>
+
+<div id="folder-modal" class="hidden modal-overlay" onclick="document.getElementById('folder-modal').classList.add('hidden')">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>📂 フォルダ整理</h3>
+    <p id="folder-target-game" style="font-size:0.8rem; color:#666; text-align:center;"></p>
+    <label>移動先を選択</label>
+    <select id="folder-select" style="margin-bottom:10px;">
+      </select>
+    <label>または新しいフォルダを作成</label>
+    <input type="text" id="new-folder-input" placeholder="例: 2025秋季リーグ" style="margin-bottom:15px;">
+    
+    <button onclick="applyFolderMove()" style="background:#007bff; color:white;">決定</button>
+    <button onclick="document.getElementById('folder-modal').classList.add('hidden')" style="background:#666; color:white; margin-top:5px;">キャンセル</button>
+  </div>
+</div>
 
 <div id="inning-modal" class="hidden modal-overlay">
   <div class="modal-box" onclick="event.stopPropagation()">
@@ -253,6 +277,7 @@
 
   <button id="submit-btn" onclick="recordBall()">一球記録</button>
   <button onclick="saveAndExit()" style="margin-top:10px; background:#6c757d; color:white; padding:8px; border:none; border-radius:4px;">保存して終了</button>
+  <button onclick="undoLastBall()" style="background:#dc3545; color:white; border:none; border-radius:4px; padding:0 15px; font-weight:bold;">1球戻る</button>
 </div>
 
 <script>
@@ -264,6 +289,8 @@
   let dataBuffer = [];
   let isSending = false;
   let unknownPlayerCount = 1;
+  let folderListCache = []; // フォルダキャッシュ
+  let targetGameIdForFolder = ""; // フォルダ操作対象
   
   let gameState = {
     gameId: "", matchName: "", inning: 1, isTop: true, outs: 0, balls: 0, strikes: 0,
@@ -303,7 +330,7 @@
     });
   }
 
-  // ■■■ イニング移動 (改良: 1番〜9番から選択) ■■■
+  // ■■■ イニング移動 ■■■
   function openInningModal() {
     document.getElementById('inning-modal').classList.remove('hidden');
     updateInningModalPlayers();
@@ -315,7 +342,6 @@
     const attackTeamName = isNextTop ? gameState.teams.top : gameState.teams.bottom;
     const defenseTeamName = isNextTop ? gameState.teams.bottom : gameState.teams.top;
     
-    // 守備側(投手)は全員から選ぶ
     const defRoster = ROSTER_CACHE[defenseTeamName];
     if (!defRoster) { alert("名簿データがありません。"); return; }
     
@@ -323,20 +349,18 @@
     pSelect.innerHTML = '<option value="">選択してください</option>';
     defRoster.pitchers.forEach(p => pSelect.add(new Option(p, p)));
 
-    // 攻撃側(打者)は「現在のラインナップ」から選ぶ
     const bSelect = document.getElementById('modal-inning-batter');
     bSelect.innerHTML = '<option value="">選択してください</option>';
     const currentLineup = isNextTop ? gameState.lineups.top : gameState.lineups.bottom;
     
     currentLineup.forEach((name, idx) => {
-        // valueには打順インデックス(0-8)を入れる
         bSelect.add(new Option(`${idx+1}番: ${name}`, idx));
     });
   }
 
   function applyInningChange() {
     const pVal = document.getElementById('modal-inning-pitcher').value;
-    const bIdxVal = document.getElementById('modal-inning-batter').value; // index (0-8)
+    const bIdxVal = document.getElementById('modal-inning-batter').value; 
 
     if (!pVal || bIdxVal === "") { alert("投手と打者を必ず選択してください"); return; }
 
@@ -361,7 +385,7 @@
     document.getElementById('inning-modal').classList.add('hidden');
   }
 
-  // ■■■ 記録処理 (V4.2改良) ■■■
+  // ■■■ 記録処理 ■■■
   function recordBall() {
     const ballTypeEl = document.querySelector('#ball-type-group .active');
     const resultEl = document.querySelector('#result-group .active');
@@ -379,7 +403,6 @@
     const detailArea = document.getElementById('hit-detail-area');
     let hitQuality = ""; let hitX = ""; let hitY = "";
     
-    // 詳細入力スキップ条件: ファール、ランナー死、併殺、三重殺、死球
     const skipDetail = isFoul || isRunnerOut || resultText.includes("併殺") || resultText.includes("三重殺") || resultText.includes("死球");
 
     if (!skipDetail && !detailArea.classList.contains('hidden')) {
@@ -387,7 +410,6 @@
       hitX = document.getElementById('hit_x').value;
       
       if (!qEl) { alert("打球の質を選択してください"); return; }
-      // 不明なら座標なしでもOK
       if (qEl.innerText !== "不明" && !hitX) { alert("グラウンドをタップして着弾点を指定してください"); return; }
       
       hitQuality = qEl.innerText; 
@@ -415,7 +437,6 @@
     processRecord(oneBallData, resultEl.innerText, resultEl.getAttribute('data-next') === 'true');
   }
 
-  // ★判定ロジック (死球対応)
   function simulatePitch(rawResultText) {
     let result = rawResultText.replace(/(\r\n|\n|\r)/gm, "")
                               .replace('※', '')
@@ -447,7 +468,6 @@
     return next;
   }
 
-  // 以下、共通・既存ロジック
   function resolveUnknown(action) {
     const data = window.tempData;
     let resultTextForLogic = "";
@@ -464,7 +484,6 @@
     const currentAttackingSide = gameState.isTop ? 'top' : 'bottom';
     let isNext = isNextForce;
     if (resultText !== "") { 
-        // 特殊結果対応
         const resText = cleanResult(resultText);
         let logicNext = false;
         if (resText.includes("ランナー死")) {
@@ -509,7 +528,6 @@
     selectBtn('result-group', element);
     const detailArea = document.getElementById('hit-detail-area');
     const text = element.innerText;
-    // 詳細不要: ファール, ランナー死, 併殺, 三重殺, 死球
     const skip = text.includes("ファール") || text.includes("ランナー死") ||  text.includes("死球");
     if(isHit && !skip) { detailArea.classList.remove('hidden'); } 
     else { 
@@ -558,6 +576,8 @@
     el.style.display = count > 0 ? 'block' : 'none';
     el.style.background = isSending ? '#17a2b8' : '#ffc107';
   }
+
+  // ■■■ 履歴ロード・フォルダ管理 (全面刷新) ■■■
   function loadHistory() {
     const container = document.getElementById('game-list-container');
     container.innerHTML = '<div class="spinner"></div><div>履歴取得中...</div>';
@@ -566,16 +586,116 @@
       .then(data => { renderGameList(data.games); })
       .catch(err => { container.innerHTML = '履歴取得エラー: ' + err; });
   }
+
   function renderGameList(games) {
     const list = document.getElementById('game-list-container'); list.innerHTML = "";
-    if (games.length === 0) list.innerHTML = "<p>履歴なし</p>";
+    if (games.length === 0) { list.innerHTML = "<p>履歴なし</p>"; return; }
+
+    // 1. フォルダグループ化
+    const grouped = {};
+    const folders = [];
+    
     games.forEach(g => {
-      const div = document.createElement('div'); div.className = 'game-item';
-      div.innerHTML = `<div><div style="font-weight:bold">${g.name}</div><div style="font-size:0.8rem;color:#888">${g.id}<br>${g.date}</div></div>
-      <div><button class="btn-resume" onclick="viewGameLog('${g.id}')">閲覧</button><button class="btn-resume" onclick="resumeGame('${g.id}')">再開</button><button class="btn-delete" onclick="deleteGame('${g.id}')">🗑</button></div>`;
-      list.appendChild(div);
+      const fName = g.folder || "未分類";
+      if (!grouped[fName]) {
+        grouped[fName] = [];
+        folders.push(fName);
+      }
+      grouped[fName].push(g);
+    });
+    
+    folderListCache = folders.sort(); // キャッシュ更新
+
+    // 2. フォルダ表示順 (未分類を最後に)
+    folders.sort((a, b) => {
+      if (a === "未分類") return 1;
+      if (b === "未分類") return -1;
+      return a.localeCompare(b);
+    });
+
+    folders.forEach(fName => {
+      const gList = grouped[fName];
+      const details = document.createElement('details');
+      details.className = 'folder-details';
+      // 最初のフォルダだけ開く例 (好みで削除可)
+      // if (fName === folders[0]) details.open = true; 
+
+      const summary = document.createElement('summary');
+      summary.className = 'folder-summary';
+      summary.innerHTML = `<span>📂 ${fName} <span style="font-weight:normal; font-size:0.8rem; color:#666;">(${gList.length})</span></span>`;
+      
+      const content = document.createElement('div');
+      content.className = 'folder-content';
+
+      gList.forEach(g => {
+        const item = document.createElement('div');
+        item.className = 'game-item';
+        item.innerHTML = `
+          <div>
+            <div style="font-weight:bold">${g.name}</div>
+            <div style="font-size:0.8rem;color:#888">${g.id}<br>${g.date}</div>
+          </div>
+          <div>
+            <button class="btn-folder" onclick="openFolderModal('${g.id}', '${g.name}', '${fName}')">📂</button>
+            <button class="btn-resume" onclick="viewGameLog('${g.id}')">閲覧</button>
+            <button class="btn-resume" onclick="resumeGame('${g.id}')">再開</button>
+            <button class="btn-delete" onclick="deleteGame('${g.id}')">🗑</button>
+          </div>`;
+        content.appendChild(item);
+      });
+
+      details.appendChild(summary);
+      details.appendChild(content);
+      list.appendChild(details);
     });
   }
+
+  // ■■■ フォルダ移動機能 (新規追加) ■■■
+  function openFolderModal(gameId, gameName, currentFolder) {
+    targetGameIdForFolder = gameId;
+    document.getElementById('folder-modal').classList.remove('hidden');
+    document.getElementById('folder-target-game').innerText = `対象: ${gameName} (現在: ${currentFolder})`;
+    document.getElementById('new-folder-input').value = "";
+    
+    const sel = document.getElementById('folder-select');
+    sel.innerHTML = `<option value="">既存フォルダから選択...</option>`;
+    folderListCache.forEach(f => {
+      sel.add(new Option(f, f));
+    });
+  }
+
+  function applyFolderMove() {
+    const existing = document.getElementById('folder-select').value;
+    const isNew = document.getElementById('new-folder-input').value;
+    
+    let finalFolder = isNew.trim() !== "" ? isNew.trim() : existing;
+    if (!finalFolder) { alert("フォルダを指定してください"); return; }
+    
+    document.getElementById('loading-screen').style.display = 'flex';
+    document.getElementById('loading-text').innerText = "フォルダ移動中...";
+
+    fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'set_folder',
+        game_id: targetGameIdForFolder,
+        folder_name: finalFolder
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById('folder-modal').classList.add('hidden');
+      alert("移動しました");
+      loadHistory(); // リスト更新
+      document.getElementById('loading-screen').style.display = 'none';
+    })
+    .catch(err => {
+      alert("エラー: " + err);
+      document.getElementById('loading-screen').style.display = 'none';
+    });
+  }
+
+  // 既存機能
   function resumeGame(gameId) {
     if(!confirm("再開しますか？")) return;
     document.getElementById('loading-screen').style.display = 'flex';
@@ -831,6 +951,63 @@
     const now = new Date();
     document.getElementById('input-game-id').value = "GAME-" + (now.getMonth()+1)+""+now.getDate()+"-"+now.getHours()+now.getMinutes();
   }
+  
+  async function undoLastBall() {
+  var unsentCountElem = document.getElementById('unsent-count');
+  var unsentCount = unsentCountElem ? parseInt(unsentCountElem.innerText) : 0;
+  
+  if (unsentCount > 0) {
+    alert("未送信のデータがあります。通信が完了するまでお待ちください。");
+    return;
+  }
+  var gameId = document.getElementById('current-game-id').innerText;
+  if (!gameId) {
+     gameId = document.getElementById('input-game-id').value;
+  }
+
+  if (!gameId) {
+    alert("試合IDが見つかりません。試合が開始されているか確認してください。");
+    return;
+  }
+
+  if (!confirm("直前の1球を削除し、状態を戻しますか？\n(スプレッドシートの最新行を削除します)")) {
+    return;
+  }
+
+  var loadingScreen = document.getElementById('loading-screen');
+  if (loadingScreen) loadingScreen.style.display = 'block';
+
+  try {
+    if (typeof GAS_URL === 'undefined') {
+      alert("GAS_URL が定義されていません。");
+      if (loadingScreen) loadingScreen.style.display = 'none';
+      return;
+    }
+
+    var response = await fetch(GAS_URL, { 
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'undo',
+        game_id: gameId
+      })
+    });
+    
+    var result = await response.json();
+
+    if (result.status === 'deleted') {
+      alert("直前の1球を削除しました。ホーム画面に戻ってしまうので試合履歴から再開してください");
+      location.reload(); 
+    } else {
+      alert("削除に失敗したか、データが見つかりませんでした。");
+    }
+
+  } catch (e) {
+    console.error(e);
+    alert("通信エラーが発生しました: " + e.message);
+  } finally {
+    if (loadingScreen) loadingScreen.style.display = 'none';
+  }
+}
 </script>
 </body>
 </html>
