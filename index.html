@@ -722,14 +722,16 @@
       if (lineupLog) {
         try {
           const lineupT = JSON.parse(lineupLog[3]); const lineupB = JSON.parse(lineupLog[4]);
-          const ps = JSON.parse(lineupLog[5]); const matchInfo = JSON.parse(lineupLog[6] || "{}");
+          const ps = JSON.parse(lineupLog[5]); // ★ここにチーム名も保存されている
           gameState.lineups.top = lineupT; gameState.lineups.bottom = lineupB;
           gameState.pitchers.top = ps.topP; gameState.pitchers.bottom = ps.btmP;
-          if(matchInfo.topTeam && matchInfo.btmTeam) {
-             gameState.teams.top = matchInfo.topTeam; gameState.teams.bottom = matchInfo.btmTeam;
-             const isPracT = (matchInfo.topTeam !== MY_TEAM); const isPracB = (matchInfo.btmTeam !== MY_TEAM);
-             promises.push(fetch(`${GAS_URL}?type=roster&team=${matchInfo.topTeam}&is_practice=${isPracT}`).then(r=>r.json()).then(d=>ROSTER_CACHE[matchInfo.topTeam]=d));
-             promises.push(fetch(`${GAS_URL}?type=roster&team=${matchInfo.btmTeam}&is_practice=${isPracB}`).then(r=>r.json()).then(d=>ROSTER_CACHE[matchInfo.btmTeam]=d));
+          
+          // ★ matchInfo ではなく ps からチーム名を読み取るように変更
+          if(ps.topTeam && ps.btmTeam) {
+             gameState.teams.top = ps.topTeam; gameState.teams.bottom = ps.btmTeam;
+             const isPracT = (ps.topTeam !== MY_TEAM); const isPracB = (ps.btmTeam !== MY_TEAM);
+             promises.push(fetch(`${GAS_URL}?type=roster&team=${ps.topTeam}&is_practice=${isPracT}`).then(r=>r.json()).then(d=>ROSTER_CACHE[ps.topTeam]=d));
+             promises.push(fetch(`${GAS_URL}?type=roster&team=${ps.btmTeam}&is_practice=${isPracB}`).then(r=>r.json()).then(d=>ROSTER_CACHE[ps.btmTeam]=d));
           }
         } catch(e) { console.log(e); }
       }
@@ -941,22 +943,45 @@
   // モーダルから「hidden」クラスを外して表示する
   document.getElementById('sub-modal').classList.remove('hidden');
 }
-  function applyPitcherChange() {
-    const newPitcher = document.getElementById('sub-pitcher-select').value;
-    if(newPitcher==="NEW_PLAYER") return;
-    const defenseSide = gameState.isTop ? 'bottom' : 'top';
-    gameState.pitchers[defenseSide] = newPitcher;
-    document.getElementById('current-pitcher').innerText = newPitcher;
-    document.getElementById('sub-modal').classList.add('hidden');
+
+function applyPitcherChange() {
+  let newPitcher = document.getElementById('sub-pitcher-select').value;
+  const defenseSide = gameState.isTop ? 'bottom' : 'top';
+  const defenseTeam = gameState.teams[defenseSide];
+
+  // 「新しい選手」が選ばれた場合の処理
+  if (newPitcher === "NEW_PLAYER") {
+    newPitcher = "不明" + (unknownPlayerCount++); // 不明1, 不明2...を作成
+    // 名簿（キャッシュ）に追加して、後で選べるようにする
+    if (ROSTER_CACHE[defenseTeam]) {
+      ROSTER_CACHE[defenseTeam].pitchers.push(newPitcher);
+    }
   }
-  function applyBatterChange() {
-    const newBatter = document.getElementById('sub-batter-select').value;
-    if(newBatter==="NEW_PLAYER") return;
-    const attackSide = gameState.isTop ? 'top' : 'bottom';
-    gameState.lineups[attackSide][gameState.batterIndex[attackSide]] = newBatter;
-    document.getElementById('current-batter').innerText = newBatter;
-    document.getElementById('sub-modal').classList.add('hidden');
+
+  gameState.pitchers[defenseSide] = newPitcher;
+  document.getElementById('current-pitcher').innerText = newPitcher;
+  document.getElementById('sub-modal').classList.add('hidden');
+}
+
+// ■■■ 代打の処理 ■■■
+function applyBatterChange() {
+  let newBatter = document.getElementById('sub-batter-select').value;
+  const attackSide = gameState.isTop ? 'top' : 'bottom';
+  const attackTeam = gameState.teams[attackSide];
+
+  // 「新しい選手」が選ばれた場合の処理
+  if (newBatter === "NEW_PLAYER") {
+    newBatter = "不明" + (unknownPlayerCount++); // 不明1, 不明2...を作成
+    // 名簿（キャッシュ）に追加して、後で選べるようにする
+    if (ROSTER_CACHE[attackTeam]) {
+      ROSTER_CACHE[attackTeam].fielders.push(newBatter);
+    }
   }
+
+  gameState.lineups[attackSide][gameState.batterIndex[attackSide]] = newBatter;
+  document.getElementById('current-batter').innerText = newBatter;
+  document.getElementById('sub-modal').classList.add('hidden');
+}
   function startGame() {
     const isPractice = document.getElementById('mode-practice').checked;
     let topTeam = document.getElementById('team-top').value;
