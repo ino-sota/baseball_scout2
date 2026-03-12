@@ -898,6 +898,38 @@
     document.getElementById('input-speed').disabled = chk.checked;
     document.getElementById('speed-disp').innerText = chk.checked ? "不明" : document.getElementById('input-speed').value;
   }
+  function openSubModal() {
+  // 現在の攻撃チームと守備チームを取得
+  const attackTeam = gameState.isTop ? gameState.teams.top : gameState.teams.bottom;
+  const defenseTeam = gameState.isTop ? gameState.teams.bottom : gameState.teams.top;
+
+  const pSelect = document.getElementById('sub-pitcher-select');
+  const bSelect = document.getElementById('sub-batter-select');
+
+  // セレクトボックスの中身をリセット
+  pSelect.innerHTML = '<option value="">選択してください</option>';
+  bSelect.innerHTML = '<option value="">選択してください</option>';
+
+  // 守備側の投手リストをセット
+  if (ROSTER_CACHE[defenseTeam]) {
+    ROSTER_CACHE[defenseTeam].pitchers.forEach(p => {
+      pSelect.add(new Option(p, p));
+    });
+    pSelect.add(new Option("＋ 選手を追加(不明)", "NEW_PLAYER"));
+  }
+
+  // 攻撃側の全選手（代打候補）をセット
+  if (ROSTER_CACHE[attackTeam]) {
+    const allAttackPlayers = [...ROSTER_CACHE[attackTeam].pitchers, ...ROSTER_CACHE[attackTeam].fielders];
+    allAttackPlayers.forEach(p => {
+      bSelect.add(new Option(p, p));
+    });
+    bSelect.add(new Option("＋ 選手を追加(不明)", "NEW_PLAYER"));
+  }
+
+  // モーダルから「hidden」クラスを外して表示する
+  document.getElementById('sub-modal').classList.remove('hidden');
+}
   function applyPitcherChange() {
     const newPitcher = document.getElementById('sub-pitcher-select').value;
     if(newPitcher==="NEW_PLAYER") return;
@@ -944,12 +976,6 @@
     document.getElementById('game-screen').classList.remove('hidden');
     document.getElementById('current-game-id').innerText = gameState.gameId;
     updateDisplay();
-  }
-  function showSetup() {
-    document.getElementById('dashboard-screen').classList.add('hidden');
-    document.getElementById('setup-screen').classList.remove('hidden');
-    const now = new Date();
-    document.getElementById('input-game-id').value = "GAME-" + (now.getMonth()+1)+""+now.getDate()+"-"+now.getHours()+now.getMinutes();
   }
   
   async function undoLastBall() {
