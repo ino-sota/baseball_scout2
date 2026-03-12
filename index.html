@@ -451,7 +451,7 @@
     else if (["見逃し","空振り","ファール"].includes(result)) {
       if (gameState.strikes < 2 || result !== "ファール") gameState.strikes++;
       if (gameState.strikes >= 3) { next = true; addOut = true; }
-    } else if (["四死球","死球","安打","失策","アウト"].includes(result)) {
+    } else if (["四死球","死球","安打","二塁打","三塁打","本塁打","失策","アウト"].includes(result)) {
       next = true;
       if (result === "アウト") addOut = true;
     }
