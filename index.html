@@ -72,10 +72,27 @@
   .btn-resume { padding: 5px 10px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 0.8rem; margin-right: 5px;}
   .btn-delete { padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 0.8rem; }
   .count-btn { margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; font-weight: bold; text-align: left; padding-left: 20px; width:100%; padding:12px;}
-  /* テンキー用スタイル */
-  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
-  .num-btn { padding: 15px; font-size: 1.4rem; font-weight: bold; background: #fff; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .numpad { 
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 5px; /* ボタン同士の隙間を少し狭く */
+    width: 180px; /* 全体の幅をストライクゾーン幅に制限 */
+    margin: 10px auto 0; /* 画面の中央に配置 */
+  }
+  .num-btn { 
+    padding: 0; /* 自動の余白を消す */
+    height: 45px; /* 高さを固定して押しやすい四角形に */
+    font-size: 1.2rem; /* 文字を少し小さく */
+    font-weight: bold; 
+    background: #fff; 
+    border: 2px solid #ddd; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    text-align: center; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+  }
   .num-btn:active { background: #e9ecef; }
+  .num-btn.ctrl { background: #e2e6ea; color: #495057; }  .num-btn:active { background: #e9ecef; }
   .num-btn.ctrl { background: #e2e6ea; color: #495057; }
 </style>
 </head>
