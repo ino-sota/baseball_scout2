@@ -487,13 +487,24 @@
         const resText = cleanResult(resultText);
         let logicNext = false;
         if (resText.includes("ランナー死")) {
-           gameState.outs++; if (gameState.outs >= 3) logicNext = true; 
+            gameState.outs++; 
+            if (gameState.outs >= 3) {
+                logicNext = true;
+                // ランナー死でチェンジの場合、打者はそのまま次イニングの先頭になる（野球のルール通り）
+                // ただしカウントは引き継いではいけないのでリセットする
+                gameState.balls = 0; gameState.strikes = 0; 
+            }
         } else if (resText.includes("併殺")) {
-           gameState.outs += 2; logicNext = true;
+            gameState.outs += 2; logicNext = true;
+            gameState.balls = 0; gameState.strikes = 0; // カウントリセット
+            // 併殺打でチェンジになる場合、打者を進めておかないと次イニングも同じ打者になってしまうのを防ぐ
+            gameState.batterIndex[currentAttackingSide] = (gameState.batterIndex[currentAttackingSide] + 1) % 9;
         } else if (resText.includes("三重殺")) {
-           gameState.outs += 3; logicNext = true;
+            gameState.outs += 3; logicNext = true;
+            gameState.balls = 0; gameState.strikes = 0; // カウントリセット
+            gameState.batterIndex[currentAttackingSide] = (gameState.batterIndex[currentAttackingSide] + 1) % 9;
         } else {
-           logicNext = simulatePitch(resText);
+            logicNext = simulatePitch(resText);
         }
         if (logicNext) isNext = true; 
     }
