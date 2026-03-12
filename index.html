@@ -72,6 +72,11 @@
   .btn-resume { padding: 5px 10px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 0.8rem; margin-right: 5px;}
   .btn-delete { padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; font-size: 0.8rem; }
   .count-btn { margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; font-weight: bold; text-align: left; padding-left: 20px; width:100%; padding:12px;}
+  /* テンキー用スタイル */
+  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .num-btn { padding: 15px; font-size: 1.4rem; font-weight: bold; background: #fff; border: 2px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .num-btn:active { background: #e9ecef; }
+  .num-btn.ctrl { background: #e2e6ea; color: #495057; }
 </style>
 </head>
 <body>
@@ -205,10 +210,27 @@
     </div>
     <input type="hidden" id="course_id">
     
-    <div class="range-wrap" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
-      <label>球速: <span id="speed-disp" style="font-weight:bold;color:#007bff;">130</span> km/h</label>
-      <input type="range" id="input-speed" min="60" max="170" value="130" oninput="document.getElementById('speed-disp').innerText=this.value">
-      <div style="text-align:right;"><label><input type="checkbox" id="speed-unknown" onchange="toggleSpeed()"> 不明</label></div>
+    <div class="numpad-wrap" style="margin-top:15px; border-top:2px solid #eee; padding-top:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-size:1.1rem;">球速: <span id="speed-disp" style="font-weight:bold;color:#007bff;font-size:1.4rem;">---</span> <span style="font-size:0.9rem">km/h</span></label>
+        <button id="btn-speed-unknown" class="btn-check" style="width:auto; height:35px; padding:0 15px; font-size:0.9rem;" onclick="toggleNumpadUnknown()">不明</button>
+      </div>
+      <input type="hidden" id="input-speed" value="">
+      
+      <div class="numpad" id="speed-numpad">
+        <button class="num-btn" onclick="inputSpeed('1')">1</button>
+        <button class="num-btn" onclick="inputSpeed('2')">2</button>
+        <button class="num-btn" onclick="inputSpeed('3')">3</button>
+        <button class="num-btn" onclick="inputSpeed('4')">4</button>
+        <button class="num-btn" onclick="inputSpeed('5')">5</button>
+        <button class="num-btn" onclick="inputSpeed('6')">6</button>
+        <button class="num-btn" onclick="inputSpeed('7')">7</button>
+        <button class="num-btn" onclick="inputSpeed('8')">8</button>
+        <button class="num-btn" onclick="inputSpeed('9')">9</button>
+        <button class="num-btn ctrl" onclick="inputSpeed('C')">C</button>
+        <button class="num-btn" onclick="inputSpeed('0')">0</button>
+        <button class="num-btn ctrl" onclick="inputSpeed('BS')">消</button>
+      </div>
     </div>
   </div>
 
@@ -416,7 +438,9 @@
       hitY = document.getElementById('hit_y').value;
     }
     
-    let speed = document.getElementById('speed-unknown').checked ? "不明" : document.getElementById('input-speed').value + "km/h";
+    const isUnknownBtn = document.getElementById('btn-speed-unknown').classList.contains('active');
+    const speedInput = document.getElementById('input-speed').value;
+    let speed = isUnknownBtn ? "不明" : (speedInput ? speedInput + "km/h" : "不明(未入力)");
 
     const oneBallData = {
       game_id: gameState.gameId, match_name: gameState.matchName, 
@@ -529,6 +553,9 @@
     for(let btn of document.getElementsByClassName('btn-check')) btn.classList.remove('active');
     document.getElementById('hit-detail-area').classList.add('hidden');
     document.getElementById('hit_x').value = ""; document.getElementById('hit_y').value = ""; document.getElementById('hit-marker').style.display = 'none';
+    document.getElementById('input-speed').value = "";
+    document.getElementById('speed-disp').innerText = "---";
+    document.getElementById('btn-speed-unknown').classList.remove('active');
   }
   function selectBtn(groupId, element) {
     const group = document.getElementById(groupId);
@@ -906,11 +933,7 @@
     document.getElementById('course_id').value = "不明";
     alert("コース: 不明");
   }
-  function toggleSpeed() {
-    const chk = document.getElementById('speed-unknown');
-    document.getElementById('input-speed').disabled = chk.checked;
-    document.getElementById('speed-disp').innerText = chk.checked ? "不明" : document.getElementById('input-speed').value;
-  }
+  
   function openSubModal() {
   // 現在の攻撃チームと守備チームを取得
   const attackTeam = gameState.isTop ? gameState.teams.top : gameState.teams.bottom;
@@ -1070,6 +1093,41 @@ function applyBatterChange() {
     if (loadingScreen) loadingScreen.style.display = 'none';
   }
 }
+// ■■■ 球速テンキー入力処理 ■■■
+function inputSpeed(val) {
+    const btnUnk = document.getElementById('btn-speed-unknown');
+    // 不明ボタンがONになっていたら解除する
+    if (btnUnk.classList.contains('active')) {
+      btnUnk.classList.remove('active');
+    }
+    
+    let current = document.getElementById('input-speed').value;
+    
+    if (val === 'C') {
+      current = ""; // クリア
+    } else if (val === 'BS') {
+      current = current.slice(0, -1); // 1文字消去（バックスペース）
+    } else {
+      if (current.length < 3) { // 球速は最大3桁（例: 155）
+        current += val;
+      }
+    }
+    
+    document.getElementById('input-speed').value = current;
+    document.getElementById('speed-disp').innerText = current === "" ? "---" : current;
+  }
+
+  function toggleNumpadUnknown() {
+    const btn = document.getElementById('btn-speed-unknown');
+    btn.classList.toggle('active'); // ON/OFFの切り替え
+    
+    if (btn.classList.contains('active')) {
+      document.getElementById('speed-disp').innerText = "不明";
+      document.getElementById('input-speed').value = ""; // 入力値を空にする
+    } else {
+      document.getElementById('speed-disp').innerText = "---";
+    }
+  }
 </script>
 </body>
 </html>
