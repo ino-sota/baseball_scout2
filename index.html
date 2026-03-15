@@ -774,7 +774,8 @@
           // ★ matchInfo ではなく ps からチーム名を読み取るように変更
           if(ps.topTeam && ps.btmTeam) {
              gameState.teams.top = ps.topTeam; gameState.teams.bottom = ps.btmTeam;
-             const isPracT = (ps.topTeam !== MY_TEAM); const isPracB = (ps.btmTeam !== MY_TEAM);
+             const isPracT = !FIXED_TEAMS.includes(ps.topTeam); 
+             const isPracB = !FIXED_TEAMS.includes(ps.btmTeam);
              promises.push(fetch(`${GAS_URL}?type=roster&team=${ps.topTeam}&is_practice=${isPracT}`).then(r=>r.json()).then(d=>ROSTER_CACHE[ps.topTeam]=d));
              promises.push(fetch(`${GAS_URL}?type=roster&team=${ps.btmTeam}&is_practice=${isPracB}`).then(r=>r.json()).then(d=>ROSTER_CACHE[ps.btmTeam]=d));
           }
@@ -788,11 +789,11 @@
         // 再開時に名簿がキャッシュになければ、ここで確実に取りに行く
         const fetchTasks = [];
         if (topTeam && !ROSTER_CACHE[topTeam]) {
-            const isPrac = (topTeam !== MY_TEAM);
+            const isPrac = !FIXED_TEAMS.includes(topTeam); // ★修正
             fetchTasks.push(fetch(`${GAS_URL}?type=roster&team=${topTeam}&is_practice=${isPrac}`).then(r=>r.json()).then(d=>ROSTER_CACHE[topTeam]=d));
         }
         if (btmTeam && !ROSTER_CACHE[btmTeam]) {
-            const isPrac = (btmTeam !== MY_TEAM);
+            const isPrac = !FIXED_TEAMS.includes(btmTeam); // ★修正
             fetchTasks.push(fetch(`${GAS_URL}?type=roster&team=${btmTeam}&is_practice=${isPrac}`).then(r=>r.json()).then(d=>ROSTER_CACHE[btmTeam]=d));
         }
 
@@ -990,8 +991,8 @@
     
     try {
       const teamsToFetch = [
-        { name: attackTeam, isPrac: (attackTeam !== MY_TEAM) },
-        { name: defenseTeam, isPrac: (defenseTeam !== MY_TEAM) }
+        { name: attackTeam, isPrac: !FIXED_TEAMS.includes(attackTeam) },
+        { name: defenseTeam, isPrac: !FIXED_TEAMS.includes(defenseTeam) }
       ];
 
       for (const t of teamsToFetch) {
