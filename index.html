@@ -336,6 +336,7 @@
     lineups: { top: [], bottom: [] }, pitchers: { top: "", bottom: "" }, batterIndex: { top: 0, bottom: 0 },
     teams: { top: "", bottom: "" }
   };
+  let isResumingData = false; // ★この1行を追加
 
   window.onload = function() {
     initTeamSelects();
@@ -503,7 +504,7 @@
         gameState.outs = 0;
         if (!gameState.isTop) gameState.inning++;
         gameState.isTop = !gameState.isTop;
-        setTimeout(() => alert("3アウト チェンジ！"), 100);
+        if (!isResumingData) setTimeout(() => alert("3アウト チェンジ！"), 100);
       }
     }
     return next;
@@ -779,7 +780,29 @@
           }
         } catch(e) { console.log(e); }
       }
-      Promise.all(promises).then(() => {
+      // --- resumeGame関数内の Promise.all(promises).then(() => { 以降を書き換え ---
+      Promise.all(promises).then(async () => { // asyncを追加
+        const topTeam = gameState.teams.top;
+        const btmTeam = gameState.teams.bottom;
+        
+        // 再開時に名簿がキャッシュになければ、ここで確実に取りに行く
+        const fetchTasks = [];
+        if (topTeam && !ROSTER_CACHE[topTeam]) {
+            const isPrac = (topTeam !== MY_TEAM);
+            fetchTasks.push(fetch(`${GAS_URL}?type=roster&team=${topTeam}&is_practice=${isPrac}`).then(r=>r.json()).then(d=>ROSTER_CACHE[topTeam]=d));
+        }
+        if (btmTeam && !ROSTER_CACHE[btmTeam]) {
+            const isPrac = (btmTeam !== MY_TEAM);
+            fetchTasks.push(fetch(`${GAS_URL}?type=roster&team=${btmTeam}&is_practice=${isPrac}`).then(r=>r.json()).then(d=>ROSTER_CACHE[btmTeam]=d));
+        }
+
+        // 全ての名簿取得が終わるまで待機
+        if (fetchTasks.length > 0) {
+            await Promise.all(fetchTasks);
+        }
+        isResumingData = true;
+
+        // 名簿が揃った状態でログを解析
         logs.forEach(r => {
           if(r[2] === "SYSTEM_LINEUP") return;
           const isTop = r[4].includes("表"); const side = isTop ? 'top' : 'bottom';
@@ -796,8 +819,12 @@
              else if(next) { gameState.batterIndex[side] = (gameState.batterIndex[side] + 1) % 9; }
           }
         });
+
+        isResumingData = false;
+
         const last = logs[logs.length-1]; gameState.matchName = last[14] || ""; 
-        updateDisplay(); document.getElementById('current-game-id').innerText = gameId;
+        updateDisplay(); 
+        document.getElementById('current-game-id').innerText = gameId;
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('dashboard-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
@@ -951,10 +978,36 @@
     alert("コース: 不明");
   }
   
-  function openSubModal() {
+  async function openSubModal() {
   // 現在の攻撃チームと守備チームを取得
   const attackTeam = gameState.isTop ? gameState.teams.top : gameState.teams.bottom;
   const defenseTeam = gameState.isTop ? gameState.teams.bottom : gameState.teams.top;
+
+  // --- 【追加】名簿がキャッシュにない場合、その場で取得を試みる ---
+  if (!ROSTER_CACHE[attackTeam] || !ROSTER_CACHE[defenseTeam]) {
+    document.getElementById('loading-screen').style.display = 'flex';
+    document.getElementById('loading-text').innerText = "名簿を再取得中...";
+    
+    try {
+      const teamsToFetch = [
+        { name: attackTeam, isPrac: (attackTeam !== MY_TEAM) },
+        { name: defenseTeam, isPrac: (defenseTeam !== MY_TEAM) }
+      ];
+
+      for (const t of teamsToFetch) {
+        if (t.name && !ROSTER_CACHE[t.name]) {
+          const res = await fetch(`${GAS_URL}?type=roster&team=${t.name}&is_practice=${t.isPrac}`);
+          ROSTER_CACHE[t.name] = await res.json();
+        }
+      }
+    } catch (e) {
+      console.error("名簿取得エラー:", e);
+      alert("名簿の取得に失敗しました。");
+    } finally {
+      document.getElementById('loading-screen').style.display = 'none';
+    }
+  }
+  // --- ここまで ---
 
   const pSelect = document.getElementById('sub-pitcher-select');
   const bSelect = document.getElementById('sub-batter-select');
@@ -980,7 +1033,7 @@
     bSelect.add(new Option("＋ 選手を追加(不明)", "NEW_PLAYER"));
   }
 
-  // モーダルから「hidden」クラスを外して表示する
+  // モーダルを表示
   document.getElementById('sub-modal').classList.remove('hidden');
 }
 
